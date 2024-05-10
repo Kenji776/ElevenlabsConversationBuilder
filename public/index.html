@@ -195,7 +195,7 @@
 		textarea.value = before + tag +'\n' + after;
 
 		// Move the cursor between the opening and closing tags
-		const newCursorPos = startPos + openTag.length;
+		const newCursorPos = startPos + tag.indexOf(']')+2;
 		textarea.selectionStart = newCursorPos;
 		textarea.selectionEnd = newCursorPos;
 		textarea.focus();

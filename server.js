@@ -10,6 +10,11 @@ let voiceMap = {};
 
 // Extract the ELEVENLABS_API_KEY from environment variables
 const elevenLabsApiKey = process.env.ELEVENLABS_API_KEY;
+const el_stability = process.env.BASE_STABILITIY;
+const el_similarity = process.env.BASE_SIMILARITY;
+const el_styleEx = process.env.BASE_STYLE_EXAGGERATION;
+const el_speakerBoost = process.env.USE_SPEAKER_BOOST;
+
 
 // Serve the main page from the 'public' directory
 app.get('/', (req, res) => {
@@ -81,13 +86,16 @@ function ttsToElevenLabs(voiceId, text, callback) {
     text: text,
     model: 'eleven_turbo_v2',
     voice_settings: {
-      "similarity_boost": 0.40,
-      "stability": 0.45,
-      "style": 0.15,
-      "use_speaker_boost": false
+      "similarity_boost": process.env.BASE_SIMILARITY,
+      "stability": process.env.BASE_STABILITIY,
+      "style": process.env.BASE_STYLE_EXAGGERATION,
+      "use_speaker_boost": process.env.USE_SPEAKER_BOOST
     },
     audioFormat: 'mp3'
   });
+  
+  console.log('Sending request with settings');
+  console.log(JSON.parse(data));
 
   const options = {
     hostname: 'api.elevenlabs.io',
