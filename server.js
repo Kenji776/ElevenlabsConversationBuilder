@@ -1,11 +1,15 @@
 const express = require('express');
 const https = require('https');
+require('dotenv').config();
 const app = express();
 const PORT = 3000;
 const path = require('path');
 app.use(express.json());
 
 let voiceMap = {};
+
+// Extract the ELEVENLABS_API_KEY from environment variables
+const elevenLabsApiKey = process.env.ELEVENLABS_API_KEY;
 
 // Serve the main page from the 'public' directory
 app.get('/', (req, res) => {
@@ -21,7 +25,7 @@ function loadVoiceData() {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
-      'xi-api-key': '999fbae870c9824e80c17f72f299e28d'  // Use process.env.ELEVENLABS_API_KEY in production
+      'xi-api-key': elevenLabsApiKey  // Use process.env.ELEVENLABS_API_KEY in production
     }
   };
 
@@ -91,7 +95,7 @@ function ttsToElevenLabs(voiceId, text, callback) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'xi-api-key': '999fbae870c9824e80c17f72f299e28d'
+      'xi-api-key': elevenLabsApiKey
     }
   };
 
