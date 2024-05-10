@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Text-to-Speech with ElevenLabs</title>
+  <style>
+    body {
+      background-color: #121212;
+      color: #ffffff;
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      box-sizing: border-box;
+    }
+
+    .container {
+      max-width: 600px;
+      width: 100%;
+      background-color: #1e1e1e;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+
+    textarea {
+      width: 100%;
+      height: 150px;
+      padding: 10px;
+      margin-bottom: 10px;
+      border-radius: 4px;
+      border: none;
+      color: #333;
+      background-color: #f5f5f5;
+      box-sizing: border-box;
+    }
+
+    button {
+      background-color: #4caf50;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      text-align: center;
+      text-decoration: none;
+      display: inline-block;
+      font-size: 16px;
+      margin-top: 10px;
+      cursor: pointer;
+      border-radius: 4px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+	.modal {
+		display: none; /* Hidden by default */
+		position: fixed; /* Stay in place */
+		z-index: 1; /* Sit on top */
+		left: 0;
+		top: 0;
+		width: 100%; /* Full width */
+		height: 100%; /* Full height */
+		overflow: auto; /* Enable scroll if needed */
+		background-color: rgb(0,0,0); /* Fallback color */
+		background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+	}
+
+	.modal-content {
+		background-color: #333; /* Dark background for the content */
+		margin: 15% auto; /* 15% from the top and centered */
+		padding: 20px;
+		border: 1px solid #888;
+		width: 80%; /* Could be more or less, depending on screen size */
+		color: white; /* Text color */
+	}
+
+	.close {
+		color: #aaa;
+		float: right;
+		font-size: 28px;
+		font-weight: bold;
+	}
+
+	.close:hover,
+	.close:focus {
+		color: #000;
+		text-decoration: none;
+		cursor: pointer;
+	}
+	.padding-small{
+		padding: 5px;
+	}
+  </style>
+</head>
+<body>
+	<div class="container">
+		<h1>Text-to-Speech Conversation Builder</h1>
+		
+		<div style="white-space:nowrap" class="padding-small">
+			<label for="voiceSelect">Choose a Voice:</label>
+			<select id="voiceSelect">
+				<!-- Options will be dynamically added here -->
+			</select>
+		</div>
+		
+		<div class="padding-small">
+			<label for="textArea">Enter text with voice tags (e.g., [voiceName]text[/voiceName]):</label>
+			
+			<textarea id="messages" placeholder="Use [voiceName]text[/voiceName] to specify voices."></textarea>
+		</div>
+		
+		<button id="submitButton">Synthesize and Play</button>
+		
+		<button id="downloadButton" style="display:none">Download Conversation</button>
+	</div>
+	<div id="errorModal" class="modal">
+		<div class="modal-content">
+			<span class="close">&times;</span>
+			<p id="errorMessage"></p>
+		</div>
+	</div>
+  <script>
+
+	let voiceMap = {};
+	let combinedBuffer = null;
+	const downloadLink = document.getElementById('downloadButton');
+	document.addEventListener('DOMContentLoaded', async () => {
+		// Example voice name to voice ID mapping
+		voiceMap = await getVoices();
+
+		console.log('Voice Map');
+		console.log(voiceMap);
+
+		populateSelectList(voiceMap);
+
+		registerVoiceSelectHandler();
+
+		registerSubmitButtonHandler();
+	});
+
+	async function getVoices() {
+		const response = await fetch('/voices', {
+			method: 'GET',
+		});
+
+		console.log('got Voices');
+		console.log(response.body);
+
+		if (!response.ok) {
+			const errorDetail = await response.text();
+			console.error('Failed to get voices:', errorDetail);
+			showErrorModal(errorDetail);
+			return {};
+		}
+
+		const jsonData = await response.json();
+		console.log('Voices data:', jsonData);
+
+		return jsonData;
+	}
+
+	function populateSelectList(voiceMap) {
+		// Get the select element by its ID
+		const selectElement = document.getElementById('voiceSelect');
+
+		// Iterate over each key-value pair in the voiceMap object
+		for (const [name, value] of Object.entries(voiceMap)) {
+			// Create a new option element
+			const option = document.createElement('option');
+			option.value = value;
+			option.textContent = name;
+
+			// Append the option to the select element
+			selectElement.appendChild(option);
+		}
+	}
+
+	// Function to insert text into the textarea at the cursor position
+	function insertAtCursor(tag) {
+		const textarea = document.getElementById('messages');
+		const startPos = textarea.selectionStart;
+		const endPos = textarea.selectionEnd;
+		let before = textarea.value.substring(0, startPos);
+		const after = textarea.value.substring(endPos, textarea.value.length);
+		//const openTag = `[${text}]`;
+		//const closeTag = `[/${text}]`;
+		
+		console.log('Selected text is');
+		console.log(tag);
+
+		if(before.length > 0) before = before + '\n';
+		// Insert the text
+		textarea.value = before + tag +'\n' + after;
+
+		// Move the cursor between the opening and closing tags
+		const newCursorPos = startPos + openTag.length;
+		textarea.selectionStart = newCursorPos;
+		textarea.selectionEnd = newCursorPos;
+		textarea.focus();
+	}
+
+	function registerVoiceSelectHandler() {
+		document.getElementById('voiceSelect').addEventListener('change', function() {
+			const selectedName = this.options[this.selectedIndex].text;
+			const textToInsert = `[${selectedName}] [/${selectedName}]`;
+			insertAtCursor(textToInsert);
+		});
+	}
+
+	function registerSubmitButtonHandler() {
+		const textArea = document.getElementById('messages');
+		const submitButton = document.getElementById('submitButton');
+
+		submitButton.addEventListener('click', async () => {
+			const text = textArea.value;
+			if (!text) {
+				console.error("No text entered in the text area.");
+				return;
+			}
+			console.log("Submit button clicked, processing text...");
+
+			const messages = text.split('\n');
+			
+			console.log('Messages array');
+			console.log(messages);
+			combinedBuffer = null;
+
+			let completedAudio = await fetchAndProcessAudio(0,messages);
+		});
+	}
+	
+	async function fetchAndProcessAudio(index,messages=[]) {
+	
+		downloadLink.style.display = 'none';
+
+		if (index >= messages.length) {
+			console.log('End of stream reached. Finalizing buffer and generating download link');
+			generateDownloadLink(combinedBuffer);
+			return combinedBuffer; // Return combined audio buffer
+		}
+
+		const message = messages[index];
+		
+		if(!message || message.length === 0){
+			console.log('Empty message found. Skipping');
+			fetchAndProcessAudio(index + 1,messages)
+		}
+		const delayPattern = /\[delay\](\d+)\[\/delay\]/;
+		const delayMatch = message.match(delayPattern);
+		let delayTime = 0;
+		let messageContent = message;
+
+		if (delayMatch) {
+			delayTime = parseInt(delayMatch[1], 10) * 1000; // Convert seconds to milliseconds
+			messageContent = message.replace(delayPattern, '').trim(); // Remove the delay tag from the message
+			console.log('Message is a delay. Waiting for ' + delayTime + ' milliseconds');
+
+			setTimeout(function() {
+				console.log('Waiting....');
+			}, delayTime);
+
+			fetchAndProcessAudio(index + 1,messages);
+
+
+		}
+
+		const processedText = messageContent.replace(/\[(.*?)\](.*?)\[\/\1\]/gs, (match, voiceName, content) => {
+			if (!voiceMap.hasOwnProperty(voiceName)) {
+				console.error(`Unknown voice name: ${voiceName}`);
+				return match;
+			}
+			const voiceId = voiceMap[voiceName];
+			return voiceId ? `[${voiceId}]${content}[/${voiceId}]` : match;
+		});
+
+		try {
+			console.log('Sending message for TTS');
+			console.log(processedText);
+			const response = await fetch('/text-to-speech', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({
+					text: processedText
+				})
+			});
+
+			if (!response.ok) {
+				const errorDetail = await response.text();
+				console.error('Failed to synthesize speech:', errorDetail);
+				showErrorModal(errorDetail);
+				return;
+			}
+			const audioContext = new AudioContext();
+			const audioBlob = await response.blob();
+			const arrayBuffer = await audioBlob.arrayBuffer();
+			const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+			//add this audio to the combined buffer
+			if (combinedBuffer === null) {
+				combinedBuffer = audioBuffer;
+			} else {
+				combinedBuffer = await concatenateAudioBuffers(combinedBuffer, audioBuffer, audioContext);
+			}
+			
+			const audioUrl = URL.createObjectURL(audioBlob);
+			const audio = new Audio(audioUrl);
+			
+			console.log("Audio playback started...");
+			audio.play();
+			
+			// Process the next message after the audio ends
+			audio.onended = () => {
+				fetchAndProcessAudio(index + 1,messages);
+			};
+		} catch (error) {
+			console.error('Error during text-to-speech processing:', error);
+			showErrorModal(error.message);
+		}
+	}
+			
+	function generateDownloadLink(finalBuffer){	
+		if(!finalBuffer){
+			console.warn('No audio data in provided buffer. Cannot generate download link');
+			return;
+		}
+		try{
+			const audioContext = new AudioContext();
+			console.log('Final buffer encountered. Creating downloadable link');
+			audioContext.createBufferSource().buffer = finalBuffer;
+			const finalBlob = bufferToWave(finalBuffer, finalBuffer.length);
+			const audioUrl = URL.createObjectURL(finalBlob);
+			downloadLink.onclick = function() {
+				const tempLink = document.createElement('a');
+				tempLink.href = audioUrl;
+				tempLink.download = 'combined_audio.wav';
+				document.body.appendChild(tempLink);
+				tempLink.click();
+				document.body.removeChild(tempLink);
+			};
+			downloadLink.style.display = 'block';
+
+			
+		}catch (error) {
+			console.error('Error generating download link:', error);
+			showErrorModal(error.message);
+		}
+	}
+
+	// Function to concatenate two audio buffers
+	async function concatenateAudioBuffers(buffer1, buffer2, context) {
+		const numberOfChannels = Math.min(buffer1.numberOfChannels, buffer2.numberOfChannels);
+		const tmpBuffer = context.createBuffer(numberOfChannels, (buffer1.length + buffer2.length), buffer1.sampleRate);
+		for (let channel = 0; channel < numberOfChannels; channel++) {
+			const channelData = tmpBuffer.getChannelData(channel);
+			channelData.set(buffer1.getChannelData(channel), 0);
+			channelData.set(buffer2.getChannelData(channel), buffer1.length);
+		}
+		return tmpBuffer;
+	}
+
+	// Function to convert an AudioBuffer to a WAV file Blob
+	function bufferToWave(abuffer, len) {
+		const numOfChan = abuffer.numberOfChannels;
+		const length = len * numOfChan * 2 + 44;
+		const buffer = new ArrayBuffer(length);
+		const view = new DataView(buffer);
+		const channels = [];
+		let i = 0;
+		let sample = 0;
+		const offset = 44;
+		let pos = 0;
+
+		// Write WAV container
+		setUint32(0x46464952); // "RIFF"
+		setUint32(length - 8); // file length - 8
+		setUint32(0x45564157); // "WAVE"
+
+		setUint32(0x20746d66); // "fmt " chunk
+		setUint32(16); // length = 16
+		setUint16(1); // PCM (uncompressed)
+		setUint16(numOfChan);
+		setUint32(abuffer.sampleRate);
+		setUint32(abuffer.sampleRate * 2 * numOfChan); // avg. bytes/sec
+		setUint16(numOfChan * 2); // block-align
+		setUint16(16); // 16-bit (hardcoded in this demo)
+
+		setUint32(0x61746164); // "data" - chunk
+		setUint32(length - pos - 4); // chunk length
+
+		// Write interleaved data
+		for (i = 0; i < abuffer.numberOfChannels; i++)
+			channels.push(abuffer.getChannelData(i));
+
+		while (pos < length) {
+			for (i = 0; i < numOfChan; i++) { // interleave channels
+				sample = Math.max(-1, Math.min(1, channels[i][pos / 2 / numOfChan | 0])); // clamp
+				sample = (0.5 + sample < 0 ? sample * 32768 : sample * 32767) | 0; // scale to 16-bit signed int
+				view.setInt16(pos, sample, true); // write 16-bit sample
+				pos += 2;
+			}
+		}
+
+		function setUint16(data) {
+			view.setUint16(pos, data, true);
+			pos += 2;
+		}
+
+		function setUint32(data) {
+			view.setUint32(pos, data, true);
+			pos += 4;
+		}
+
+		return new Blob([buffer], {
+			type: 'audio/wav'
+		});
+	}
+
+	
+	// Function to display the modal with an error message
+	function showErrorModal(errorMessage) {
+		// Set the error message inside the modal
+		document.getElementById('errorMessage').innerText = errorMessage;
+
+		// Display the modal
+		const modal = document.getElementById('errorModal');
+		modal.style.display = 'block';
+
+		// Get the element that closes the modal
+		const closeButton = document.querySelector('.modal .close');
+
+		// Close the modal when the user clicks on <span> (x)
+		closeButton.onclick = function() {
+			modal.style.display = 'none';
+		};
+
+		// Close the modal if the user clicks anywhere outside of the modal
+		window.onclick = function(event) {
+			if (event.target == modal) {
+				modal.style.display = 'none';
+			}
+		};
+	}
+  </script>
+</body>
+</html>
